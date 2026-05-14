@@ -162,12 +162,12 @@ rules = [
     { mime = "application/{pdf,doc,rtf}", fg = "#a6e3a1" },
 
     # Special files
-    { name = "*", is = "orphan", bg = "#93000a" },
-    { name = "*", is = "exec", fg = "#ffdad6" },
+    { url = "*", is = "orphan", bg = "#93000a" },
+    { url = "*", is = "exec", fg = "#ffdad6" },
 
     # Fallback
-    { name = "*", fg = "#e8e0e8" },
-    { name = "*/", fg = "#ddb9f7" },
+    { url = "*", fg = "#e8e0e8" },
+    { url = "*/", fg = "#ddb9f7" },
 ]
 
 # : ]]]
