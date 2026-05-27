@@ -6,9 +6,18 @@ import Background from "./widget/Background"
 import Notifications from "./widget/Notification/Notifications"
 import AppMenu from "./widget/AppMenu"
 import WallpaperPicker, { toggleWallpaperPicker } from "./widget/WallpaperPicker"
-import { lock } from "./widget/LockScreen"
 
 let restartSource = 0
+
+function launchHyprlock() {
+  try {
+    GLib.spawn_command_line_async("hyprlock --immediate-render --no-fade-in")
+    return true
+  } catch (error) {
+    console.error("Failed to launch hyprlock", error)
+    return false
+  }
+}
 
 function createWindows() {
   const monitors = app.get_monitors()
@@ -52,10 +61,9 @@ function scheduleRestart() {
 app.start({
   css: style,
 
-  //LockScreen
   requestHandler(argv, res) {
     if (argv.includes("lock")) {
-      res(lock() ? "ok" : "failed")
+      res(launchHyprlock() ? "ok" : "failed")
       return
     }
 
@@ -67,7 +75,7 @@ app.start({
 
     res(`unknown request: ${argv.join(" ")}`)
   },
-  
+
   main() {
     createWindows()
     app.connect("notify::monitors", scheduleRestart)

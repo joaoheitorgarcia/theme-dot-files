@@ -25,11 +25,6 @@ declare module "gi://AstalApps" {
   export default AstalApps
 }
 
-declare module "gi://AstalAuth?version=0.1" {
-  const AstalAuth: any
-  export default AstalAuth
-}
-
 declare module "gi://AstalBattery" {
   const AstalBattery: any
   export default AstalBattery

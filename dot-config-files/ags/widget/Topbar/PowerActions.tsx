@@ -1,6 +1,5 @@
 import { Gtk } from "ags/gtk4"
 import BoxIcon from "../Common/BoxIcon"
-import { lock } from "../LockScreen"
 import { runCommand } from "../Common/RunCommand"
 
 type PowerAction = {
@@ -11,7 +10,7 @@ type PowerAction = {
 }
 
 const actions: PowerAction[] = [
-    { label: "Lock", icon: "lock", action: () => lock() },
+    { label: "Lock", icon: "lock", command: ["hyprlock", "--immediate-render", "--no-fade-in"] },
     { label: "Sleep", icon: "leaf", command: ["systemctl", "suspend"] },
     { label: "Reboot", icon: "redo", command: ["reboot"] },
     { label: "Shut Down", icon: "power", command: ["shutdown", "now"] },
