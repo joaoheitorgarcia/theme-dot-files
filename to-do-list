@@ -4,3 +4,7 @@ TODO:
 - Blue Ligh Filter (USE HYPRSHADER) shortcut + button in brightness menu maybe
 - ClipBoard history Widget - check QUickshell base class
 - settings for monitor managment (brightness, orientation, resolution, etc...)
+
+FIXES:
+- Unlocking always misses first try
+- bluetooth on and off doesnt reallr turn on or off bluetooth

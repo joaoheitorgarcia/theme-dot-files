@@ -28,9 +28,9 @@ office = [
   { run = 'soffice "$@"', orphan = true, desc = "OpenOffice" }
 ]
 
-# PDFs (zathura)
+# PDFs
 pdf = [
-  { run = 'mupdf "$@"', orphan = true, desc = "mupdf" }
+  { run = 'firefox "$@"', orphan = true, desc = "Firefox" }
 ]
 
 # Fonts

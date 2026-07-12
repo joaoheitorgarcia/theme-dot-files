@@ -161,13 +161,9 @@ rules = [
     # Documents
     { mime = "application/{pdf,doc,rtf}", fg = "#a6e3a1" },
 
-    # Special files
-    { name = "*", is = "orphan", bg = "{{colors.error_container.dark.hex}}" },
-    { name = "*", is = "exec", fg = "{{colors.on_error_container.dark.hex}}" },
-
     # Fallback
-    { name = "*", fg = "{{colors.on_surface.dark.hex}}" },
-    { name = "*/", fg = "{{colors.surface_tint.dark.hex}}" },
+    { mime = "*", fg = "{{colors.on_surface.dark.hex}}" },
+    { mime = "inode/directory", fg = "{{colors.surface_tint.dark.hex}}" },
 ]
 
 # : ]]]

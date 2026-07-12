@@ -182,3 +182,5 @@ local RESET="%f"
 PROMPT="%B${PROMPT_USER_COLOR}%n${RESET}:${PROMPT_HOST_COLOR}%m ${PROMPT_PATH_COLOR}%~${RESET}%b %# "
 
 export PATH="$HOME/.local/bin:$PATH"
+export PATH="/home/joaogarcia/.config/herd-lite/bin:$PATH"
+export PHP_INI_SCAN_DIR="/home/joaogarcia/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"

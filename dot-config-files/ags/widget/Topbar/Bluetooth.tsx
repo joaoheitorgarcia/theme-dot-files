@@ -74,17 +74,13 @@ function startDiscovery(adapter: BluetoothAdapter | null | undefined) {
     }
 }
 
-function setAdapterPowered(adapter: BluetoothAdapter | null | undefined, powered: boolean) {
-    if (!adapter || adapter.powered === powered) {
+function setAdapterPowered( adapter: BluetoothAdapter | null | undefined, powered: boolean) {
+    if (!adapter) {
         return
     }
 
     try {
-        adapter.powered = powered
-
-        if (powered) {
-            startDiscovery(adapter)
-        }
+        adapter.set_powered(powered)
     } catch (error) {
         console.error("Bluetooth power toggle failed", error)
     }
@@ -252,8 +248,13 @@ export default function Bluetooth() {
                             class="bluetoothSwitch"
                             active={isPowered}
                             sensitive={adapter((value) => Boolean(value))}
-                            onNotifyActive={(sw) => setAdapterPowered(adapter(), sw.active)}
-                            $={(sw) => sw.set_cursor_from_name("pointer")}
+                            $={(sw) => {
+                                sw.set_cursor_from_name("pointer")
+                                sw.connect("state-set", (_switch, state: boolean) => {
+                                    setAdapterPowered(adapter(), state)
+                                    return false
+                                })
+                            }}
                         />
                     </box>
 
