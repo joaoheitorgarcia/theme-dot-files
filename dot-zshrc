@@ -132,13 +132,7 @@ function nvrun() {
 alias nvidia='nvrun'
 alias cd..=' cd ..'
 alias install='yay -S'
-alias remove='yay -R'
-alias gcommit='git commit -m'
-alias gadd='git add .'
-alias gpush='git push'
-alias gpull='git pull'
-alias gcheckout='git checkout'
-alias gstat='git status'
+alias remove='yay -Rs'
 alias cmatrix='cmatrix -k -C white -s -b'
 
 fds() {

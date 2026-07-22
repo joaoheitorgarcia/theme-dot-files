@@ -20,8 +20,11 @@ const [showInputs, setShowInputs] = createState(false)
 let previousVolume = 0.5
 let previousInputVolume = 0.5
 
-function clampVolume(value: number) {
-    return Math.max(0, Math.min(1, value))
+const MAX_PLAYBACK_VOLUME = 1.5
+const MAX_INPUT_VOLUME = 1
+
+function clampVolume(value: number, max = MAX_PLAYBACK_VOLUME) {
+    return Math.max(0, Math.min(max, value))
 }
 
 function nodeName(node: AudioNode) {
@@ -48,12 +51,17 @@ function getVolumeIcon(value: number, muted = false) {
     return "volume-full"
 }
 
-function setNodeVolume(node: AudioNode | null | undefined, value: number, unmute = false) {
+function setNodeVolume(
+    node: AudioNode | null | undefined,
+    value: number,
+    unmute = false,
+    max = MAX_PLAYBACK_VOLUME,
+) {
     if (!node) {
         return
     }
 
-    node.volume = clampVolume(value)
+    node.volume = clampVolume(value, max)
 
     if (unmute && node.mute) {
         node.mute = false
@@ -74,16 +82,18 @@ function setDefaultNode(node: AudioNode) {
 
 function VolumeSlider({
     value,
+    max = MAX_PLAYBACK_VOLUME,
     onChange,
 }: {
     value: Accessor<number>
+    max?: number
     onChange: (value: number) => void
 }) {
     return (
         <slider
             class="soundSlider"
             min={0}
-            max={1}
+            max={max}
             step={0.01}
             value={value}
             hexpand
@@ -138,11 +148,13 @@ function SectionHeader({
 function MainVolumeRow({
     icon,
     value,
+    max = MAX_PLAYBACK_VOLUME,
     onChange,
     onToggleMute,
 }: {
     icon: Accessor<string>
     value: Accessor<number>
+    max?: number
     onChange: (value: number) => void
     onToggleMute: () => void
 }) {
@@ -167,6 +179,7 @@ function MainVolumeRow({
 
             <VolumeSlider
                 value={value}
+                max={max}
                 onChange={onChange}
             />
 
@@ -183,7 +196,9 @@ function MainVolumeRow({
 function ApplicationRow({ item }: { item: AudioNode }) {
     const name = createBinding(item, "name")
     const description = createBinding(item, "description")
-    const value = createBinding(item, "volume").as((value) => clampVolume(Number(value) || 0))
+    const value = createBinding(item, "volume").as((value) =>
+        clampVolume(Number(value) || 0, MAX_PLAYBACK_VOLUME),
+    )
     const muted = createBinding(item, "mute")
     const icon = createComputed(() => getVolumeIcon(value(), muted()))
     const percent = createComputed(() => `${Math.round(value() * 100)}%`)
@@ -326,7 +341,7 @@ export default function Sound({ gdkmonitor }: SoundProps = {}) {
         .as((value) => clampVolume(Number(value) || 0))
     const muted = createBinding(audio, "default-speaker", "mute")
     const inputVolume = createBinding(audio, "default-microphone", "volume")
-        .as((value) => clampVolume(Number(value) || 0))
+        .as((value) => clampVolume(Number(value) || 0, MAX_INPUT_VOLUME))
     const inputMuted = createBinding(audio, "default-microphone", "mute")
     const applications = createBinding(audio, "streams")
         .as((streams) => Array.from(streams ?? []) as AudioNode[])
@@ -385,7 +400,10 @@ export default function Sound({ gdkmonitor }: SoundProps = {}) {
                     <MainVolumeRow
                         icon={inputIcon}
                         value={inputVolume}
-                        onChange={(value) => setNodeVolume(defaultMicrophone(), value)}
+                        max={MAX_INPUT_VOLUME}
+                        onChange={(value) =>
+                            setNodeVolume(defaultMicrophone(), value, false, MAX_INPUT_VOLUME)
+                        }
                         onToggleMute={() => {
                             if (inputMuted()) {
                                 toggleNodeMute(defaultMicrophone())
