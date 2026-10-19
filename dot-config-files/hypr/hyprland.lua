@@ -178,6 +178,10 @@ hl.curve("quick", {
     type = "bezier",
     points = { { 0.15, 0 }, { 0.1, 1 } },
 })
+hl.curve("workspaceSlide", {
+    type = "bezier",
+    points = { { 0.22, 1 }, { 0.36, 1 } },
+})
 
 hl.animation({ leaf = "global", enabled = true, speed = 10, bezier = "default" })
 hl.animation({ leaf = "border", enabled = true, speed = 5.39, bezier = "easeOutQuint" })
@@ -192,9 +196,7 @@ hl.animation({ leaf = "layersIn", enabled = true, speed = 4, bezier = "easeOutQu
 hl.animation({ leaf = "layersOut", enabled = true, speed = 1.5, bezier = "linear", style = "fade" })
 hl.animation({ leaf = "fadeLayersIn", enabled = true, speed = 1.79, bezier = "almostLinear" })
 hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, bezier = "almostLinear" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 5, bezier = "almostLinear", style = "slide" })
-hl.animation({ leaf = "workspacesIn", enabled = true, speed = 1.21, bezier = "almostLinear", style = "fade" })
-hl.animation({ leaf = "workspacesOut", enabled = true, speed = 1.94, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspaces", enabled = true, speed = 4, bezier = "workspaceSlide", style = "slide" })
 hl.animation({ leaf = "zoomFactor", enabled = true, speed = 7, bezier = "quick" })
 
 -------------
@@ -212,6 +214,15 @@ hl.config({
     },
 
     gestures = {
+        -- Longer, direction-locked travel keeps workspace swipes tied closely
+        -- to the fingers, then settles with the workspaceSlide curve above.
+        workspace_swipe_distance = 400,
+        workspace_swipe_min_speed_to_force = 15,
+        workspace_swipe_cancel_ratio = 0.33,
+        workspace_swipe_direction_lock = true,
+        workspace_swipe_direction_lock_threshold = 12,
+        workspace_swipe_forever = false,
+        workspace_swipe_use_r = false,
         -- Workspace creation is handled by controls bounded to each 10-slot bank.
         workspace_swipe_create_new = false,
     },
