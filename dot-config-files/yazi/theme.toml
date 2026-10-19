@@ -1,11 +1,11 @@
 # : Manager [[[
 
 [mgr]
-cwd = { fg = "#e8e0e8" }
+cwd = { fg = "#e2e3d8" }
 
 # Tab
-tab_active = { fg = "#402357", bg = "#ddb9f7", bold = true }
-tab_inactive = { fg = "#2a0c41", bg = "#f2daff" }
+tab_active = { fg = "#1f3701", bg = "#b2d189", bold = true }
+tab_inactive = { fg = "#102000", bg = "#cdeda3" }
 tab_width = 1
 
 # Find
@@ -13,19 +13,19 @@ find_keyword = { fg = "#ffb4ab", bold = true, italic = true, underline = true }
 find_position = { fg = "#ffb4ab", bold = true, italic = true }
 
 # Marker
-marker_copied = { fg = "#ff7478", bg = "#ff7478" }
-marker_cut = { fg = "#ffdadb", bg = "#ffdadb" }
+marker_copied = { fg = "#6dd5cb", bg = "#6dd5cb" }
+marker_cut = { fg = "#bcece7", bg = "#bcece7" }
 marker_marked = { fg = "#ffb4ab", bg = "#ffb4ab" }
-marker_selected = { fg = "#f4b7bb", bg = "#f4b7bb" }
+marker_selected = { fg = "#a0d0cb", bg = "#a0d0cb" }
 
 # Count
-count_copied = { fg = "#321015", bg = "#ffdadb" }
-count_cut = { fg = "#321015", bg = "#ffdadb" }
-count_selected = { fg = "#402357", bg = "#f4b7bb" }
+count_copied = { fg = "#00201e", bg = "#bcece7" }
+count_cut = { fg = "#00201e", bg = "#bcece7" }
+count_selected = { fg = "#1f3701", bg = "#a0d0cb" }
 
 # Border
 border_symbol = " "
-border_style  = { fg = "#ddb9f7" }
+border_style  = { fg = "#b2d189" }
 
 # : ]]]
 
@@ -35,32 +35,32 @@ border_style  = { fg = "#ddb9f7" }
 [status]
 separator_open = "🭁"
 separator_close = "🭠"
-separator_style = { bg = "#ddb9f7", fg = "#F4A261" }
+separator_style = { bg = "#b2d189", fg = "#F4A261" }
 
 [mode]
 # Mode
-normal_main = { bg = "#ddb9f7", fg = "#402357", bold = true }
-normal_alt  = { bg = "#4b454d", fg = "#cdc3ce" }
+normal_main = { bg = "#b2d189", fg = "#1f3701", bold = true }
+normal_alt  = { bg = "#44483d", fg = "#c5c8ba" }
 
 # Select mode
-select_main = { bg = "#d1c1d9", fg = "#372c3f", bold = true }
-select_alt  = { bg = "#4b454d", fg = "#cdc3ce" }
+select_main = { bg = "#c0cbad", fg = "#2a331e", bold = true }
+select_alt  = { bg = "#44483d", fg = "#c5c8ba" }
 
 # Unset mode
-unset_main = { bg = "#f4b7bb", fg = "#4c2529", bold = true }
-unset_alt  = { bg = "#4b454d", fg = "#cdc3ce" }
+unset_main = { bg = "#a0d0cb", fg = "#003734", bold = true }
+unset_alt  = { bg = "#44483d", fg = "#c5c8ba" }
 
 # Progress
 progress_label = { bold = true }
-progress_normal = { fg = "#ddb9f7", bg = "#3c383e" }
-progress_error = { fg = "#ffb4ab", bg = "#3c383e" }
+progress_normal = { fg = "#b2d189", bg = "#383a32" }
+progress_error = { fg = "#ffb4ab", bg = "#383a32" }
 
 # Permissions
-permissions_t = { fg = "#8b629f" }
-permissions_w = { fg = "#e0323e" }
+permissions_t = { fg = "#768857" }
+permissions_w = { fg = "#479088" }
 permissions_x = { fg = "#ff2b12" }
-permissions_r = { fg = "#ff4146" }
-permissions_s = { fg = "#bc41ff" }
+permissions_r = { fg = "#45cabc" }
+permissions_s = { fg = "#87cf28" }
 
 # : ]]]
 
@@ -68,8 +68,8 @@ permissions_s = { fg = "#bc41ff" }
 # : Select [[[
 
 [select]
-border = { fg = "#ddb9f7" }
-active = { fg = "#f4b7bb", bold = true }
+border = { fg = "#b2d189" }
+active = { fg = "#a0d0cb", bold = true }
 
 # : ]]]
 
@@ -77,16 +77,16 @@ active = { fg = "#f4b7bb", bold = true }
 # : Input [[[
 
 [input]
-border = { fg = "#ddb9f7" }
-value = { fg = "#e8e0e8" }
+border = { fg = "#b2d189" }
+value = { fg = "#e2e3d8" }
 
 # : ]]]
 
 # : Tabs [[[
 
 [tabs]
-active = { fg = "#ddb9f7", bold = true, bg = "#151217" }
-inactive = { fg = "#d1c1d9", bg = "#151217" }
+active = { fg = "#b2d189", bold = true, bg = "#12140e" }
+inactive = { fg = "#c0cbad", bg = "#12140e" }
 sep_inner = { open = "[", close = "]" }
 
 # : ]]]
@@ -95,7 +95,7 @@ sep_inner = { open = "[", close = "]" }
 # : Completion [[[
 
 [completion]
-border = { fg = "#402357", bg = "#ddb9f7" }
+border = { fg = "#1f3701", bg = "#b2d189" }
 
 # : ]]]
 
@@ -103,9 +103,9 @@ border = { fg = "#402357", bg = "#ddb9f7" }
 # : Tasks [[[
 
 [tasks]
-border = { fg = "#ddb9f7" }
+border = { fg = "#b2d189" }
 title = {}
-hovered = { fg = "#ffdadb", underline = true }
+hovered = { fg = "#bcece7", underline = true }
 
 # : ]]]
 
@@ -114,12 +114,12 @@ hovered = { fg = "#ffdadb", underline = true }
 
 [which]
 cols = 3
-mask = { bg = "#3c383e" }
-cand = { fg = "#ddb9f7" }
-rest = { fg = "#402357" }
-desc = { fg = "#e8e0e8" }
+mask = { bg = "#383a32" }
+cand = { fg = "#b2d189" }
+rest = { fg = "#1f3701" }
+desc = { fg = "#e2e3d8" }
 separator = " ▶ "
-separator_style = { fg = "#e8e0e8" }
+separator_style = { fg = "#e2e3d8" }
 
 # : ]]]
 
@@ -127,9 +127,9 @@ separator_style = { fg = "#e8e0e8" }
 # : Help [[[
 
 [help]
-on = { fg = "#e8e0e8" }
-run = { fg = "#e8e0e8" }
-footer = { fg = "#372c3f", bg = "#d1c1d9" }
+on = { fg = "#e2e3d8" }
+run = { fg = "#e2e3d8" }
+footer = { fg = "#2a331e", bg = "#c0cbad" }
 
 # : ]]]
 
@@ -137,8 +137,8 @@ footer = { fg = "#372c3f", bg = "#d1c1d9" }
 # : Notify [[[
 
 [notify]
-title_info = { fg = "#f4b7bb" }
-title_warn = { fg = "#ddb9f7" }
+title_info = { fg = "#a0d0cb" }
+title_warn = { fg = "#b2d189" }
 title_error = { fg = "#ffb4ab" }
 
 # : ]]]
@@ -162,8 +162,8 @@ rules = [
     { mime = "application/{pdf,doc,rtf}", fg = "#a6e3a1" },
 
     # Fallback
-    { mime = "*", fg = "#e8e0e8" },
-    { mime = "inode/directory", fg = "#ddb9f7" },
+    { mime = "*", fg = "#e2e3d8" },
+    { mime = "inode/directory", fg = "#b2d189" },
 ]
 
 # : ]]]

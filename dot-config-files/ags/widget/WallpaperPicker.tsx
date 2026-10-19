@@ -36,6 +36,11 @@ type ThemePreviewColors = {
   error: string
 }
 
+type CachedThemePreview = {
+  mode: MatugenMode
+  colors: ThemePreviewColors
+}
+
 const preferOptions: { id: MatugenPrefer; label: string }[] = [
   { id: "saturation", label: "Saturation" },
   { id: "less-saturation", label: "Muted" },
@@ -51,6 +56,7 @@ const [selectedPrefer, setSelectedPrefer] = createState<MatugenPrefer>("saturati
 const [activeControl, setActiveControl] = createState<ActiveControl>("wallpapers")
 const [matugenPreferOptions] = createState(preferOptions)
 const [themePreview, setThemePreview] = createState<ThemePreviewColors>(fallbackThemePreview())
+const [thumbnailPaths, setThumbnailPaths] = createState<Record<string, string>>({})
 const selectedBackground = createComputed(() => backgrounds()[selectedIndex()] ?? null)
 const indexedBackgrounds = createComputed(() =>
   backgrounds().map((entry, index) => ({ ...entry, index })),
@@ -59,6 +65,17 @@ const indexedBackgrounds = createComputed(() =>
 let wallpaperScroller: Gtk.ScrolledWindow | null = null
 let themePreviewSource = 0
 let themePreviewRequest = 0
+let themePreviewProcess: Gio.Subprocess | null = null
+let themePreviewCancellable: Gio.Cancellable | null = null
+
+const cacheDir = GLib.build_filenamev([GLib.get_user_cache_dir(), "ags", "wallpaper-picker"])
+const thumbnailDir = GLib.build_filenamev([cacheDir, "thumbnails"])
+const pendingThumbnailPath = GLib.build_filenamev([cacheDir, "pending-thumbnail"])
+const themePreviewCachePath = GLib.build_filenamev([cacheDir, "theme-previews.json"])
+const queuedThumbnails = new Set<string>()
+const thumbnailQueue: { entry: BackgroundEntry; target: string }[] = []
+let thumbnailProcessRunning = false
+const themePreviewCache = loadThemePreviewCache()
 
 function fallbackThemePreview(): ThemePreviewColors {
   return {
@@ -76,18 +93,167 @@ function fallbackThemePreview(): ThemePreviewColors {
   }
 }
 
+function decodeContents(contents: unknown) {
+  if (typeof contents === "string") {
+    return contents
+  }
+
+  return String.fromCharCode(...(contents as Uint8Array))
+}
+
+function imageFingerprint(path: string) {
+  try {
+    const info = Gio.File.new_for_path(path).query_info(
+      `${Gio.FILE_ATTRIBUTE_STANDARD_SIZE},${Gio.FILE_ATTRIBUTE_TIME_MODIFIED}`,
+      Gio.FileQueryInfoFlags.NONE,
+      null,
+    )
+    return `${path}:${info.get_size()}:${info.get_attribute_uint64(Gio.FILE_ATTRIBUTE_TIME_MODIFIED)}`
+  } catch {
+    return path
+  }
+}
+
+function cacheKey(value: string) {
+  return GLib.compute_checksum_for_string(GLib.ChecksumType.SHA256, value, -1) ?? value
+}
+
+function thumbnailPath(entry: BackgroundEntry) {
+  return GLib.build_filenamev([thumbnailDir, `${cacheKey(imageFingerprint(entry.path))}.png`])
+}
+
+function themeCacheKey(path: string, prefer: MatugenPrefer) {
+  return cacheKey(`${imageFingerprint(path)}:${prefer}`)
+}
+
+function loadThemePreviewCache(): Record<string, CachedThemePreview> {
+  try {
+    const [, contents] = Gio.File.new_for_path(themePreviewCachePath).load_contents(null)
+    return JSON.parse(decodeContents(contents)) as Record<string, CachedThemePreview>
+  } catch {
+    return {}
+  }
+}
+
+function saveThemePreviewCache() {
+  try {
+    GLib.mkdir_with_parents(cacheDir, 0o755)
+    GLib.file_set_contents(themePreviewCachePath, `${JSON.stringify(themePreviewCache)}\n`)
+  } catch (error) {
+    console.error("Failed to save wallpaper theme preview cache", error)
+  }
+}
+
+function queueBackgroundThumbnails(entries: BackgroundEntry[]) {
+  GLib.mkdir_with_parents(thumbnailDir, 0o755)
+
+  const paths = { ...thumbnailPaths() }
+  let pathsChanged = false
+
+  for (const entry of entries) {
+    const target = thumbnailPath(entry)
+
+    if (Gio.File.new_for_path(target).query_exists(null)) {
+      if (paths[entry.path] !== target) {
+        paths[entry.path] = target
+        pathsChanged = true
+      }
+    } else {
+      if (paths[entry.path] && paths[entry.path] !== target) {
+        delete paths[entry.path]
+        pathsChanged = true
+      }
+
+      if (!queuedThumbnails.has(target)) {
+        queuedThumbnails.add(target)
+        thumbnailQueue.push({ entry, target })
+      }
+    }
+  }
+
+  if (pathsChanged) {
+    setThumbnailPaths(paths)
+  }
+
+  generateNextThumbnail()
+}
+
+function generateNextThumbnail() {
+  if (thumbnailProcessRunning) {
+    return
+  }
+
+  const queued = thumbnailQueue.shift()
+  if (!queued) {
+    return
+  }
+
+  thumbnailProcessRunning = true
+  const temporary = `${queued.target}.tmp`
+  const command = [
+    "magick",
+    `${queued.entry.path}[0]`,
+    "-auto-orient",
+    "-thumbnail",
+    "600x810",
+    "-strip",
+    `png:${temporary}`,
+  ]
+
+  try {
+    const process = Gio.Subprocess.new(
+      command,
+      Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE,
+    )
+
+    process.communicate_utf8_async(null, null, (_process, result) => {
+      try {
+        const [, , stderr] = process.communicate_utf8_finish(result)
+
+        if (!process.get_successful()) {
+          console.error(
+            `Thumbnail generation failed (${process.get_exit_status()}): ${stderr || command.join(" ")}`,
+          )
+          return
+        }
+
+        Gio.File.new_for_path(temporary).move(
+          Gio.File.new_for_path(queued.target),
+          Gio.FileCopyFlags.OVERWRITE,
+          null,
+          null,
+        )
+        setThumbnailPaths({ ...thumbnailPaths(), [queued.entry.path]: queued.target })
+      } catch (error) {
+        console.error(`Failed to generate thumbnail for ${queued.entry.path}`, error)
+      } finally {
+        queuedThumbnails.delete(queued.target)
+        thumbnailProcessRunning = false
+        generateNextThumbnail()
+      }
+    })
+  } catch (error) {
+    console.error(`Failed to start thumbnail generation for ${queued.entry.path}`, error)
+    queuedThumbnails.delete(queued.target)
+    thumbnailProcessRunning = false
+    generateNextThumbnail()
+  }
+}
+
 function refreshBackgrounds() {
   const entries = listBackgrounds()
   const currentPath = currentBackgroundPath()
   const currentIndex = entries.findIndex((entry) => entry.path === currentPath)
 
   setBackgrounds(entries)
+  queueBackgroundThumbnails(entries)
   setSelectedIndex(currentIndex >= 0 ? currentIndex : entries.length > 0 ? 0 : -1)
   scrollSelectionIntoView(currentIndex >= 0 ? currentIndex : 0)
   scheduleThemePreview()
 }
 
 function closePicker() {
+  cancelThemePreview()
   const window = app.get_window("wallpaperpicker")
 
   if (window) {
@@ -113,7 +279,11 @@ export function toggleWallpaperPicker() {
   const window = app.get_window("wallpaperpicker")
 
   if (window) {
-    window.visible = !window.visible
+    if (window.visible) {
+      closePicker()
+    } else {
+      window.visible = true
+    }
   }
 }
 
@@ -122,7 +292,8 @@ function applyBackground(entry: BackgroundEntry | null | undefined) {
     return
   }
 
-  const mode = pickMatugenMode(entry.path)
+  const cached = themePreviewCache[themeCacheKey(entry.path, selectedPrefer())]
+  const mode = cached?.mode ?? pickMatugenMode(entry.path)
 
   selectBackground(entry)
   closePicker()
@@ -191,18 +362,51 @@ function previewFromMatugenJson(data: any): ThemePreviewColors {
 }
 
 function scheduleThemePreview() {
+  themePreviewRequest++
+  cancelThemePreviewProcess()
+
   if (themePreviewSource) {
     GLib.Source.remove(themePreviewSource)
   }
 
-  themePreviewSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+  const request = themePreviewRequest
+  themePreviewSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => {
     themePreviewSource = 0
-    updateThemePreview()
+    updateThemePreview(request)
     return GLib.SOURCE_REMOVE
   })
 }
 
-function updateThemePreview() {
+function cancelThemePreviewProcess() {
+  themePreviewCancellable?.cancel()
+
+  try {
+    if (themePreviewProcess && !themePreviewProcess.get_if_exited()) {
+      themePreviewProcess.force_exit()
+    }
+  } catch {
+    // The process may have exited between checking and stopping it.
+  }
+
+  themePreviewProcess = null
+  themePreviewCancellable = null
+}
+
+function cancelThemePreview() {
+  themePreviewRequest++
+  cancelThemePreviewProcess()
+
+  if (themePreviewSource) {
+    GLib.Source.remove(themePreviewSource)
+    themePreviewSource = 0
+  }
+}
+
+function updateThemePreview(request: number) {
+  if (request !== themePreviewRequest) {
+    return
+  }
+
   const entry = selectedBackground()
 
   if (!entry) {
@@ -210,12 +414,20 @@ function updateThemePreview() {
     return
   }
 
-  const request = ++themePreviewRequest
-  const mode = pickMatugenMode(entry.path)
+  const previewKey = themeCacheKey(entry.path, selectedPrefer())
+  const cached = themePreviewCache[previewKey]
+
+  if (cached) {
+    setThemePreview(cached.colors)
+    return
+  }
+
+  const previewPath = thumbnailPaths()[entry.path] ?? entry.path
+  const mode = pickMatugenMode(previewPath)
   const command = [
     "matugen",
     "image",
-    entry.path,
+    previewPath,
     "-m",
     mode,
     "--prefer",
@@ -231,8 +443,11 @@ function updateThemePreview() {
       command,
       Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
     )
+    const cancellable = new Gio.Cancellable()
+    themePreviewProcess = process
+    themePreviewCancellable = cancellable
 
-    process.communicate_utf8_async(null, null, (_process, result) => {
+    process.communicate_utf8_async(null, cancellable, (_process, result) => {
       try {
         const [, stdout, stderr] = process.communicate_utf8_finish(result)
 
@@ -247,9 +462,19 @@ function updateThemePreview() {
           return
         }
 
-        setThemePreview(previewFromMatugenJson(JSON.parse(stdout)))
+        const colors = previewFromMatugenJson(JSON.parse(stdout))
+        themePreviewCache[previewKey] = { mode, colors }
+        saveThemePreviewCache()
+        setThemePreview(colors)
       } catch (error) {
-        console.error(`Failed to generate matugen preview: ${command.join(" ")}`, error)
+        if (request === themePreviewRequest) {
+          console.error(`Failed to generate matugen preview: ${command.join(" ")}`, error)
+        }
+      } finally {
+        if (request === themePreviewRequest) {
+          themePreviewProcess = null
+          themePreviewCancellable = null
+        }
       }
     })
   } catch (error) {
@@ -465,7 +690,9 @@ function BackgroundCard({
       >
         <Gtk.Picture
           class="wallpaperPreview"
-          file={Gio.File.new_for_path(entry.path)}
+          file={thumbnailPaths((paths) =>
+            Gio.File.new_for_path(paths[entry.path] ?? pendingThumbnailPath),
+          )}
           contentFit={Gtk.ContentFit.COVER}
           canShrink
         />
@@ -748,6 +975,9 @@ export default function WallpaperPicker(gdkmonitor: Gdk.Monitor) {
   const { TOP, LEFT, RIGHT, BOTTOM } = Astal.WindowAnchor
   const geometry = gdkmonitor.get_geometry()
 
+  // Fill the persistent cache in the background before the picker opens.
+  queueBackgroundThumbnails(listBackgrounds())
+
   return (
     <window
       name="wallpaperpicker"
@@ -778,6 +1008,8 @@ export default function WallpaperPicker(gdkmonitor: Gdk.Monitor) {
               window.grab_focus()
               return GLib.SOURCE_REMOVE
             })
+          } else {
+            cancelThemePreview()
           }
         })
       }}

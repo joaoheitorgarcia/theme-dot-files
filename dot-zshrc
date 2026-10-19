@@ -116,7 +116,7 @@ export VISUAL=nano
 alias ls='ls --color=auto'
 alias autoremove='yay -Yc'
 alias update='yay -Syu'
-alias source='source ~/.bashrc'
+#alias source-reload='source ~/.zshrc'
 alias grep='grep --color=auto'
 alias list-packages='pacman -Qe'
 alias powermode-current='cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'
@@ -178,3 +178,7 @@ PROMPT="%B${PROMPT_USER_COLOR}%n${RESET}:${PROMPT_HOST_COLOR}%m ${PROMPT_PATH_CO
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="/home/joaogarcia/.config/herd-lite/bin:$PATH"
 export PHP_INI_SCAN_DIR="/home/joaogarcia/.config/herd-lite/bin:$PHP_INI_SCAN_DIR"
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
