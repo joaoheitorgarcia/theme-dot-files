@@ -5,19 +5,39 @@
 --- Monitors ---
 ----------------
 
+local laptop_monitor = "eDP-2"
+local external_monitor = "HDMI-A-1"
+local workspaces_per_monitor = 10
+
 hl.monitor({
-    output = "eDP-2",
+    output = laptop_monitor,
     mode = "preferred",
     position = "0x0",
     scale = 1,
 })
 
 hl.monitor({
-    output = "HDMI-A-1",
+    output = external_monitor,
     mode = "preferred",
     position = "auto-left",
     scale = 1,
 })
+
+-- Give each monitor an on-demand workspace bank. The laptop owns the real IDs
+-- 1-10, while the external monitor uses 11-20 (shown as 1-10 in AGS).
+for workspace = 1, workspaces_per_monitor do
+    hl.workspace_rule({
+        workspace = tostring(workspace),
+        monitor = laptop_monitor,
+        default = workspace == 1,
+    })
+
+    hl.workspace_rule({
+        workspace = tostring(workspace + workspaces_per_monitor),
+        monitor = external_monitor,
+        default = workspace == 1,
+    })
+end
 
 ----------------
 --- Programs ---
@@ -177,6 +197,11 @@ hl.config({
         kb_rules = "",
         follow_mouse = 2,
     },
+
+    gestures = {
+        -- Workspace creation is handled by controls bounded to each 10-slot bank.
+        workspace_swipe_create_new = false,
+    },
 })
 
 hl.gesture({
@@ -224,11 +249,49 @@ for _, direction in ipairs(directions) do
     hl.bind(main_mod .. " + SHIFT + " .. direction, hl.dsp.window.move({ direction = direction }))
 end
 
--- Switch workspaces and move the active window with the number row.
-for workspace = 1, 10 do
-    local key = workspace % 10
-    hl.bind(main_mod .. " + " .. key, hl.dsp.focus({ workspace = workspace }))
-    hl.bind(main_mod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = workspace }))
+-- Resolve number-row shortcuts within the active monitor's workspace bank.
+local function workspace_for_active_monitor(local_workspace)
+    local monitor = hl.get_active_monitor()
+
+    if monitor ~= nil and monitor.name == external_monitor then
+        return local_workspace + workspaces_per_monitor
+    end
+
+    return local_workspace
+end
+
+local function cycle_local_workspace(delta)
+    local workspace = hl.get_active_workspace()
+
+    if workspace == nil then
+        return
+    end
+
+    local monitor = hl.get_active_monitor()
+    local offset = monitor ~= nil and monitor.name == external_monitor
+        and workspaces_per_monitor
+        or 0
+    local local_workspace = ((workspace.id - offset - 1 + delta) % workspaces_per_monitor) + 1
+
+    hl.dispatch(hl.dsp.focus({ workspace = local_workspace + offset }))
+end
+
+-- Switch local workspaces and move the active window with the number row.
+for workspace = 1, workspaces_per_monitor do
+    local local_workspace = workspace
+    local key = local_workspace % 10
+
+    hl.bind(main_mod .. " + " .. key, function()
+        hl.dispatch(hl.dsp.focus({
+            workspace = workspace_for_active_monitor(local_workspace),
+        }))
+    end)
+
+    hl.bind(main_mod .. " + SHIFT + " .. key, function()
+        hl.dispatch(hl.dsp.window.move({
+            workspace = workspace_for_active_monitor(local_workspace),
+        }))
+    end)
 end
 
 -- Special workspace (scratchpad).
@@ -236,8 +299,12 @@ hl.bind(main_mod .. " + S", hl.dsp.workspace.toggle_special("magic"))
 hl.bind(main_mod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
 -- Scroll workspaces.
-hl.bind(main_mod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
-hl.bind(main_mod .. " + mouse_up", hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(main_mod .. " + mouse_down", function()
+    cycle_local_workspace(1)
+end)
+hl.bind(main_mod .. " + mouse_up", function()
+    cycle_local_workspace(-1)
+end)
 
 -- Move and resize windows with the mouse.
 hl.bind(main_mod .. " + mouse:272", hl.dsp.window.drag(), { mouse = true })

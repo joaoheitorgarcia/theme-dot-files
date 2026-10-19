@@ -16,6 +16,7 @@ import { monitorId } from "./Common/Monitor"
 export default function Topbar(gdkmonitor: Gdk.Monitor) {
   const { TOP, LEFT, RIGHT } = Astal.WindowAnchor
   const id = monitorId(gdkmonitor)
+  const monitorName = String(gdkmonitor.get_connector?.() ?? gdkmonitor.connector ?? "").trim()
 
   return (
     <window
@@ -41,7 +42,7 @@ export default function Topbar(gdkmonitor: Gdk.Monitor) {
           $type="start"
           class="topbarStart"
         >
-          <Workspaces/>
+          <Workspaces monitorName={monitorName} />
         </box>
     
         {/* END */}
