@@ -70,7 +70,20 @@ hl.env("QT_QPA_PLATFORMTHEME", "qt5ct")
 hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
 hl.env("HYPRSHOT_DIR", "Pictures/Screenshots")
 
--- Prefer the integrated/default GPU. Use nvrun for NVIDIA offload apps.
+-- The setup script writes this only when multiple GPUs need an explicit order.
+-- A blank file means there is one GPU, so Aquamarine can select it normally.
+local state_home = os.getenv("XDG_STATE_HOME") or (os.getenv("HOME") .. "/.local/state")
+local gpu_order_file = io.open(state_home .. "/hypr/gpu-order", "r")
+if gpu_order_file then
+    local gpu_order = gpu_order_file:read("*l")
+    gpu_order_file:close()
+
+    if gpu_order and gpu_order:match("%S") then
+        hl.env("AQ_DRM_DEVICES", gpu_order)
+    end
+end
+
+-- Use nvrun for applications that should render on NVIDIA.
 hl.env("DRI_PRIME", "0")
 hl.env("__NV_PRIME_RENDER_OFFLOAD", "0")
 

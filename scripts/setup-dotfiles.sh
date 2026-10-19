@@ -4,26 +4,26 @@ set -euo pipefail
 
 DRY_RUN=0
 FORCE=0
-GPU_DETECT=1
+GPU_SETUP=1
 INSTALL_DEPS=0
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/setup-dotfiles.sh [--dry-run] [--force] [--install-deps] [--skip-gpu-detect]
+Usage: ./scripts/setup-dotfiles.sh [--dry-run] [--force] [--install-deps] [--skip-gpu-setup]
 
 Options:
   --dry-run          Print actions without changing anything
   --force            Replace symlinks that point to a different target
   --install-deps     Install Arch packages needed by these dotfiles
-  --skip-gpu-detect  Do not adjust Hyprland AQ_DRM_DEVICES setup
+  --skip-gpu-setup   Do not detect GPUs or install stable DRM aliases
   -h, --help         Show this help
 
 What it does:
   - Optionally installs Hyprland, AGS, yazi, matugen, kitty, shell plugins, and helper tools on Arch
   - Symlinks every top-level folder in dot-config-files/ to ~/.config/
-  - Symlinks dot-zshrc to ~/.zshrc
+  - Symlinks dot-zshrc and dot-zprofile into the home directory
   - Backs up existing real files/folders before replacing them
-  - Keeps Hyprland AQ_DRM_DEVICES dynamic via the hyprland-safe launcher
+  - Detects DRM devices and configures stable multi-GPU aliases for Hyprland
 EOF
 }
 
@@ -32,7 +32,7 @@ while (($# > 0)); do
     --dry-run) DRY_RUN=1 ;;
     --force) FORCE=1 ;;
     --install-deps) INSTALL_DEPS=1 ;;
-    --skip-gpu-detect) GPU_DETECT=0 ;;
+    --skip-gpu-setup|--skip-gpu-detect) GPU_SETUP=0 ;;
     -h|--help)
       usage
       exit 0
@@ -79,6 +79,9 @@ REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 CONFIG_SRC="$REPO_ROOT/dot-config-files"
 ZSHRC_SRC="$REPO_ROOT/dot-zshrc"
 ZPROFILE_SRC="$REPO_ROOT/dot-zprofile"
+GPU_UDEV_RULE_DST="/etc/udev/rules.d/99-hyprland-gpus.rules"
+GPU_ORDER_FILE="$HOME/.local/state/hypr/gpu-order"
+DRM_SYSFS_ROOT="${DRM_SYSFS_ROOT:-/sys/class/drm}"
 CONFIG_DST="$HOME/.config"
 TS="$(date +%Y%m%d-%H%M%S)"
 
@@ -354,44 +357,115 @@ done < <(find "$CONFIG_SRC" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sor
 link_one "$ZSHRC_SRC" "$HOME/.zshrc"
 link_one "$ZPROFILE_SRC" "$HOME/.zprofile"
 
-disable_static_hypr_gpu_order() {
-  local conf="$CONFIG_SRC/hypr/hyprland.conf"
-  local tmp
-  local detected=""
+configure_gpus() {
+  local card
+  local card_name
+  local device_path
+  local gpu_order=""
+  local gpu_order_tmp
+  local gpu_priority
+  local gpu_vendor_name
+  local index
+  local pci_slot
+  local rule_line
+  local vendor
+  local rule_tmp
+  local seen_slots=" "
+  local -a gpu_records=()
+  local -a ordered_gpus=()
 
-  [[ "$GPU_DETECT" -eq 1 ]] || return 0
+  [[ "$GPU_SETUP" -eq 1 ]] || return 0
 
-  if [[ ! -f "$conf" ]]; then
-    log "SKIP: missing Hyprland config: $conf"
+  for card in "$DRM_SYSFS_ROOT"/card[0-9]*; do
+    [[ -e "$card" ]] || continue
+    card_name="$(basename -- "$card")"
+    [[ "$card_name" =~ ^card[0-9]+$ ]] || continue
+    [[ -r "$card/device/vendor" ]] || continue
+
+    vendor="$(<"$card/device/vendor")"
+    device_path="$(readlink -f "$card/device" 2>/dev/null || true)"
+    pci_slot="$(basename -- "$device_path")"
+    [[ "$pci_slot" =~ ^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$ ]] || continue
+
+    [[ "$seen_slots" == *" $pci_slot "* ]] && continue
+    seen_slots+="$pci_slot "
+
+    # Prefer integrated/non-NVIDIA GPUs. Keep NVIDIA last so outputs wired to
+    # it remain available without making it the default renderer.
+    case "$vendor" in
+      0x8086) gpu_priority=10 ;;
+      0x1002) gpu_priority=20 ;;
+      0x10de) gpu_priority=90 ;;
+      *) gpu_priority=50 ;;
+    esac
+
+    gpu_records+=("$(printf '%03d|%s|%s' "$gpu_priority" "$pci_slot" "$vendor")")
+  done
+
+  if ((${#gpu_records[@]} > 0)); then
+    mapfile -t ordered_gpus < <(printf '%s\n' "${gpu_records[@]}" | sort -t '|' -k1,1n -k2,2)
+  fi
+
+  if ((${#ordered_gpus[@]} <= 1)); then
+    if ((${#ordered_gpus[@]} == 1)); then
+      IFS='|' read -r _ pci_slot vendor <<< "${ordered_gpus[0]}"
+      log "GPU detect: one GPU at $pci_slot ($vendor); AQ_DRM_DEVICES override is not needed"
+    else
+      warn "No DRM GPU cards detected below $DRM_SYSFS_ROOT; AQ_DRM_DEVICES override is disabled."
+    fi
+
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      log "[dry-run] write an empty GPU order to $GPU_ORDER_FILE"
+      return 0
+    fi
+
+    gpu_order_tmp="$(mktemp)"
+    printf '\n' > "$gpu_order_tmp"
+    install -Dm644 "$gpu_order_tmp" "$GPU_ORDER_FILE"
+    rm -f "$gpu_order_tmp"
     return 0
   fi
 
-  if [[ -x "$CONFIG_SRC/hypr/scripts/hyprland-safe" ]]; then
-    detected="$("$CONFIG_SRC/hypr/scripts/hyprland-safe" --print-drm-devices || true)"
-  fi
-
-  if [[ -n "$detected" ]]; then
-    log "GPU detect: hyprland-safe will export AQ_DRM_DEVICES=$detected"
-  else
-    log "GPU detect: hyprland-safe will detect AQ_DRM_DEVICES when Hyprland starts"
-  fi
+  log "GPU detect: ${#ordered_gpus[@]} cards; installing stable aliases in preferred order"
+  for index in "${!ordered_gpus[@]}"; do
+    IFS='|' read -r _ pci_slot vendor <<< "${ordered_gpus[$index]}"
+    case "$vendor" in
+      0x8086) gpu_vendor_name="Intel" ;;
+      0x1002) gpu_vendor_name="AMD" ;;
+      0x10de) gpu_vendor_name="NVIDIA" ;;
+      *) gpu_vendor_name="$vendor" ;;
+    esac
+    log "GPU $index: $gpu_vendor_name at $pci_slot -> /dev/dri/hypr-gpu-$index"
+    [[ -n "$gpu_order" ]] && gpu_order+=":"
+    gpu_order+="/dev/dri/hypr-gpu-$index"
+  done
 
   if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "[dry-run] comment static AQ_DRM_DEVICES entries in $conf"
+    log "[dry-run] install GPU aliases in $GPU_UDEV_RULE_DST"
+    log "[dry-run] write AQ_DRM_DEVICES=$gpu_order to $GPU_ORDER_FILE"
     return 0
   fi
 
-  tmp="$(mktemp)"
-  awk '
-    /^[[:space:]]*env = AQ_DRM_DEVICES,/ {
-      print "# " $0
-      next
-    }
-    { print }
-  ' "$conf" > "$tmp"
-  mv "$tmp" "$conf"
+  rule_tmp="$(mktemp)"
+  printf '%s\n' '# Generated by setup-dotfiles.sh; rerun setup if the GPU topology changes.' > "$rule_tmp"
+  for index in "${!ordered_gpus[@]}"; do
+    IFS='|' read -r _ pci_slot _ <<< "${ordered_gpus[$index]}"
+    rule_line="SUBSYSTEM==\"drm\", KERNEL==\"card[0-9]*\", KERNELS==\"$pci_slot\", SYMLINK+=\"dri/hypr-gpu-$index\""
+    printf '%s\n' "$rule_line" >> "$rule_tmp"
+  done
+
+  sudo install -Dm644 "$rule_tmp" "$GPU_UDEV_RULE_DST"
+  rm -f "$rule_tmp"
+  try_run sudo udevadm control --reload-rules
+  try_run sudo udevadm trigger --subsystem-match=drm --action=add
+  try_run sudo udevadm settle
+
+  gpu_order_tmp="$(mktemp)"
+  printf '%s\n' "$gpu_order" > "$gpu_order_tmp"
+  install -Dm644 "$gpu_order_tmp" "$GPU_ORDER_FILE"
+  rm -f "$gpu_order_tmp"
 }
 
-disable_static_hypr_gpu_order
+configure_gpus
 
 log "Done."
